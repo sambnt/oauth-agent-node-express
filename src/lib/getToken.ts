@@ -38,15 +38,26 @@ async function getTokenEndpointResponse(config: OAuthAgentConfiguration, code: s
     }
 
     try {
+        var extra
+        console.log(config.clientSecret)
+        if (config.clientSecret === "") {
+            extra = { headers: {},
+                      queryParams: '&client_id=' + config.clientID
+                    }
+        } else {
+            extra = { headers: {'Authorization': 'Basic ' + Buffer.from(config.clientID+ ":" + config.clientSecret).toString('base64')},
+                      queryParams: ""
+                    }
+        }
         const res = await fetch(
             config.tokenEndpoint,
             {
                 method: 'POST',
                 headers: {
-                    'Authorization': 'Basic ' + Buffer.from(config.clientID+ ":" + config.clientSecret).toString('base64'),
+                    ...extra.headers,
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },
-                body: 'grant_type=authorization_code&redirect_uri=' + config.redirectUri + '&code=' + code + '&code_verifier=' + parsedTempLoginData.codeVerifier
+                body: 'grant_type=authorization_code&redirect_uri=' + config.redirectUri + '&code=' + code + '&code_verifier=' + parsedTempLoginData.codeVerifier + extra.queryParams
             })
 
         const text = await res.text()
@@ -84,10 +95,10 @@ async function refreshAccessToken(refreshToken: string, config: OAuthAgentConfig
             {
                 method: 'POST',
                 headers: {
-                    'Authorization': 'Basic ' + Buffer.from(config.clientID + ":" + config.clientSecret).toString('base64'),
+                    // 'Authorization': 'Basic ' + Buffer.from(config.clientID + ":" + config.clientSecret).toString('base64'),
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },
-                body: 'grant_type=refresh_token&refresh_token='+refreshToken
+                body: 'grant_type=refresh_token&refresh_token=' + refreshToken + '&client_id=' + config.clientID
             })
         
         // Read text if it exists

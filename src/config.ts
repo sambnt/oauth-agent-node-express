@@ -29,7 +29,7 @@ export const config: OAuthAgentConfiguration = {
 
     // Client settings
     clientID: process.env.CLIENT_ID || 'spa-client',
-    clientSecret: process.env.CLIENT_SECRET || 'Password1',
+    clientSecret: process.env.CLIENT_SECRET || '',
     redirectUri: process.env.REDIRECT_URI || 'http://www.example.local/',
     postLogoutRedirectURI: process.env.POST_LOGOUT_REDIRECT_URI || 'http://www.example.local/',
     scope: process.env.SCOPE || 'openid profile',

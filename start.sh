@@ -1,4 +1,5 @@
-#!/usr/bin/env bash
+#! /usr/bin/env nix-shell
+#! nix-shell -i bash -p nodejs_18 gettext
 
 export PORT=8082
 export TRUSTED_WEB_ORIGIN="http://www.example.com"

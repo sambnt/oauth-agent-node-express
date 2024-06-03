@@ -19,70 +19,44 @@ import base64url from 'base64url';
 import {CookieSerializeOptions, serialize} from 'cookie'
 import {CookieDecryptionException, InvalidCookieException} from '../lib/exceptions/index.js'
 
-const VERSION_SIZE = 1;
-const GCM_IV_SIZE = 12;
-const GCM_TAG_SIZE = 16;
-const CURRENT_VERSION = 1;
+const GCM_RANDOM_SIZE = 12;
 
 function encryptCookie(encKeyHex: string, plaintext: string): string {
-    
-    const ivBytes = crypto.randomBytes(GCM_IV_SIZE)
+
+    const randomBytes = crypto.randomBytes(GCM_RANDOM_SIZE)
+    const plainBytes = Buffer.from(plaintext, 'utf8')
+    const message = Buffer.concat([randomBytes, plainBytes])
+
     const encKeyBytes = Buffer.from(encKeyHex, "hex")
 
-    const cipher = crypto.createCipheriv("aes-256-gcm", encKeyBytes, ivBytes)
+    const hmac = crypto.createHmac('sha256', encKeyBytes)
+    hmac.update(message)
+    const hash = hmac.digest()
 
-    const encryptedBytes = cipher.update(plaintext)
-    const finalBytes = cipher.final()
-    
-    const versionBytes = Buffer.from(new Uint8Array([CURRENT_VERSION]))
-    const ciphertextBytes = Buffer.concat([encryptedBytes, finalBytes])
-    const tagBytes = cipher.getAuthTag()
-    
-    const allBytes = Buffer.concat([versionBytes, ivBytes, ciphertextBytes, tagBytes])
+    const sepBytes = Buffer.from('.', 'utf8')
+    const allBytes = Buffer.concat([hash, sepBytes, message])
 
     return base64url.encode(allBytes)
 }
 
 function decryptCookie(encKeyHex: string, encryptedbase64value: string): string {
-    
+
     const allBytes = base64url.toBuffer(encryptedbase64value)
 
-    const minSize = VERSION_SIZE + GCM_IV_SIZE + 1 + GCM_TAG_SIZE
-    if (allBytes.length < minSize) {
-        const error = new Error("The received cookie has an invalid length")
-        throw new InvalidCookieException(error)
-    }
+    const encKeyBytes = Buffer.from(encKeyHex, "hex")
 
-    const version = allBytes[0]
-    if (version != CURRENT_VERSION) {
-        const error = new Error("The received cookie has an invalid format")
-        throw new InvalidCookieException(error)
-    }
+    const sepIndex = allBytes.indexOf('.')
+    const hash = allBytes.slice(0, sepIndex)
+    const message = allBytes.slice(sepIndex+1)
 
-    let offset = VERSION_SIZE
-    const ivBytes = allBytes.slice(offset, offset + GCM_IV_SIZE)
+    const hmac = crypto.createHmac('sha256', encKeyBytes)
+    hmac.update(message);
+    const hashExpected = hmac.digest();
 
-    offset += GCM_IV_SIZE
-    const ciphertextBytes = allBytes.slice(offset, allBytes.length - GCM_TAG_SIZE)
-
-    offset = allBytes.length - GCM_TAG_SIZE
-    const tagBytes = allBytes.slice(offset, allBytes.length)
-
-    try {
-    
-        const encKeyBytes = Buffer.from(encKeyHex, "hex")
-        const decipher = crypto.createDecipheriv('aes-256-gcm', encKeyBytes, ivBytes)
-        decipher.setAuthTag(tagBytes)
-
-        const decryptedBytes = decipher.update(ciphertextBytes)
-        const finalBytes = decipher.final()
-        
-        const plaintextBytes = Buffer.concat([decryptedBytes, finalBytes])
-        return plaintextBytes.toString()
-
-    } catch(e: any) {
-
-        throw new CookieDecryptionException(e)
+    if (hash.equals(hashExpected)) {
+        return message.slice(GCM_RANDOM_SIZE).toString()
+    } else {
+        throw new CookieDecryptionException(new Error("The received hash didn't match expected hash"))
     }
 }
 
